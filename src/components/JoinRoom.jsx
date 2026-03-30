@@ -2,21 +2,15 @@ import { useState } from 'react'
 
 function generateRoomCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  let code = ''
-  for (let i = 0; i < 6; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)]
-  }
-  return code
+  const values = crypto.getRandomValues(new Uint8Array(16))
+  return Array.from(values, (v) => chars[v % chars.length]).join('')
 }
 
 export default function JoinRoom({ onJoin }) {
   const [nickname, setNickname] = useState(
     () => localStorage.getItem('nickname') || ''
   )
-  const [roomCode, setRoomCode] = useState(() => {
-    const params = new URLSearchParams(window.location.search)
-    return params.get('room') || ''
-  })
+  const [roomCode, setRoomCode] = useState('')
 
   function handleSubmit(e) {
     e.preventDefault()
@@ -74,7 +68,7 @@ export default function JoinRoom({ onJoin }) {
                 placeholder="Enter a code or create one"
                 value={roomCode}
                 onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-                maxLength={6}
+                maxLength={16}
               />
               <button
                 type="button"

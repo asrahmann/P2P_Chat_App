@@ -1,25 +1,29 @@
 // Web Audio API sound generator — no external audio files needed
 
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+let audioCtx = null
 
-function ensureContext() {
+function getAudioContext() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+  }
   if (audioCtx.state === 'suspended') {
     audioCtx.resume()
   }
+  return audioCtx
 }
 
 function playTone(frequency, duration, type = 'sine', volume = 0.15) {
-  ensureContext()
-  const osc = audioCtx.createOscillator()
-  const gain = audioCtx.createGain()
+  const ctx = getAudioContext()
+  const osc = ctx.createOscillator()
+  const gain = ctx.createGain()
   osc.type = type
-  osc.frequency.setValueAtTime(frequency, audioCtx.currentTime)
-  gain.gain.setValueAtTime(volume, audioCtx.currentTime)
-  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration)
+  osc.frequency.setValueAtTime(frequency, ctx.currentTime)
+  gain.gain.setValueAtTime(volume, ctx.currentTime)
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration)
   osc.connect(gain)
-  gain.connect(audioCtx.destination)
+  gain.connect(ctx.destination)
   osc.start()
-  osc.stop(audioCtx.currentTime + duration)
+  osc.stop(ctx.currentTime + duration)
 }
 
 export function playMessageSound() {

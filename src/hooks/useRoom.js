@@ -15,6 +15,7 @@ export function useRoom(roomCode, nickname) {
   const sendMetaRef = useRef(null)
   const sendTypingRef = useRef(null)
   const typingTimersRef = useRef(new Map())
+  const blobUrlsRef = useRef([])
   const onMessageCallbackRef = useRef(null)
   const onJoinCallbackRef = useRef(null)
   const onLeaveCallbackRef = useRef(null)
@@ -118,6 +119,7 @@ export function useRoom(roomCode, nickname) {
     onImg((data, peerId) => {
       const blob = new Blob([data.data], { type: data.mimeType })
       const url = URL.createObjectURL(blob)
+      blobUrlsRef.current.push(url)
       setMessages((msgs) => [
         ...msgs,
         {
@@ -168,6 +170,8 @@ export function useRoom(roomCode, nickname) {
       roomRef.current = null
       typingTimersRef.current.forEach((timer) => clearTimeout(timer))
       typingTimersRef.current.clear()
+      blobUrlsRef.current.forEach((url) => URL.revokeObjectURL(url))
+      blobUrlsRef.current = []
     }
   }, [roomCode, nickname])
 
@@ -204,6 +208,7 @@ export function useRoom(roomCode, nickname) {
       sendImgRef.current(data)
 
       const url = URL.createObjectURL(file)
+      blobUrlsRef.current.push(url)
       setMessages((msgs) => [
         ...msgs,
         {

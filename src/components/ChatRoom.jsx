@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import EmojiPicker from 'emoji-picker-react'
 import { useRoom } from '../hooks/useRoom'
 import { useVoice } from '../hooks/useVoice'
@@ -121,18 +121,23 @@ export default function ChatRoom({ roomCode, nickname, onLeave }) {
   const { isMuted, activeSpeakers, toggleMute } = useVoice(room, peers)
 
   // Handle replace messages (thinking -> response)
-  const messages = rawMessages.reduce((acc, msg) => {
-    if (msg.type === 'replace') {
-      return acc.map((m) => (m.id === msg.replaceId ? msg.replacement : m))
+  const messages = useMemo(() => {
+    const result = []
+    for (const msg of rawMessages) {
+      if (msg.type === 'replace') {
+        const idx = result.findIndex((m) => m.id === msg.replaceId)
+        if (idx !== -1) result[idx] = msg.replacement
+      } else {
+        result.push(msg)
+      }
     }
-    return [...acc, msg]
-  }, [])
+    return result
+  }, [rawMessages])
 
   // Register sound callbacks
   useEffect(() => {
-    onMessage((sender) => {
-      if (document.hidden) playMessageSound()
-      else playMessageSound()
+    onMessage(() => {
+      playMessageSound()
     })
     onJoin(() => playJoinSound())
     onPeerLeave(() => playLeaveSound())

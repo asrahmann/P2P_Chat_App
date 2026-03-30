@@ -6,8 +6,9 @@ export function useVoice(roomRef, peers) {
   const streamRef = useRef(null)
   const audioElementsRef = useRef(new Map())
   const analyserIntervalRef = useRef(null)
+  const audioCtxRef = useRef(null)
 
-  // Set up receiving peer audio streams
+  // Set up receiving peer audio streams (register once, not on every peers change)
   useEffect(() => {
     const room = roomRef.current
     if (!room) return
@@ -23,26 +24,29 @@ export function useVoice(roomRef, peers) {
       audio.srcObject = stream
     })
 
-    room.onPeerLeave?.((peerId) => {
-      const audio = audioElementsRef.current.get(peerId)
-      if (audio) {
-        audio.srcObject = null
-        audioElementsRef.current.delete(peerId)
-      }
-      setActiveSpeakers((prev) => {
-        const next = new Set(prev)
-        next.delete(peerId)
-        return next
-      })
-    })
-
     return () => {
       audioElementsRef.current.forEach((audio) => {
         audio.srcObject = null
       })
       audioElementsRef.current.clear()
     }
-  }, [roomRef, peers])
+  }, [roomRef])
+
+  // Clean up audio elements for peers that have left (without using room.onPeerLeave)
+  useEffect(() => {
+    const currentPeerIds = new Set(peers.keys())
+    for (const [peerId, audio] of audioElementsRef.current) {
+      if (!currentPeerIds.has(peerId)) {
+        audio.srcObject = null
+        audioElementsRef.current.delete(peerId)
+        setActiveSpeakers((prev) => {
+          const next = new Set(prev)
+          next.delete(peerId)
+          return next
+        })
+      }
+    }
+  }, [peers])
 
   const toggleMute = useCallback(async () => {
     const room = roomRef.current
@@ -63,8 +67,12 @@ export function useVoice(roomRef, peers) {
         room.addStream(stream)
         setIsMuted(false)
 
-        // Start voice activity detection
+        // Start voice activity detection (reuse or create AudioContext)
+        if (audioCtxRef.current) {
+          audioCtxRef.current.close().catch(() => {})
+        }
         const audioCtx = new AudioContext()
+        audioCtxRef.current = audioCtx
         const analyser = audioCtx.createAnalyser()
         const source = audioCtx.createMediaStreamSource(stream)
         source.connect(analyser)
@@ -99,6 +107,10 @@ export function useVoice(roomRef, peers) {
         clearInterval(analyserIntervalRef.current)
         analyserIntervalRef.current = null
       }
+      if (audioCtxRef.current) {
+        audioCtxRef.current.close().catch(() => {})
+        audioCtxRef.current = null
+      }
       setActiveSpeakers((prev) => {
         const next = new Set(prev)
         next.delete('self')
@@ -116,6 +128,9 @@ export function useVoice(roomRef, peers) {
       }
       if (analyserIntervalRef.current) {
         clearInterval(analyserIntervalRef.current)
+      }
+      if (audioCtxRef.current) {
+        audioCtxRef.current.close().catch(() => {})
       }
       audioElementsRef.current.forEach((audio) => {
         audio.srcObject = null

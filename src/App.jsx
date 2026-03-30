@@ -3,19 +3,19 @@ import JoinRoom from './components/JoinRoom'
 import ChatRoom from './components/ChatRoom'
 
 export default function App() {
-  const [session, setSession] = useState(null)
+  const [session, setSession] = useState(() => {
+    const roomCode = sessionStorage.getItem('roomCode')
+    const nickname = localStorage.getItem('nickname')
+    return roomCode && nickname ? { roomCode, nickname } : null
+  })
 
   function handleJoin(roomCode, nickname) {
-    const url = new URL(window.location)
-    url.searchParams.set('room', roomCode)
-    window.history.replaceState({}, '', url)
+    sessionStorage.setItem('roomCode', roomCode)
     setSession({ roomCode, nickname })
   }
 
   function handleLeave() {
-    const url = new URL(window.location)
-    url.searchParams.delete('room')
-    window.history.replaceState({}, '', url)
+    sessionStorage.removeItem('roomCode')
     setSession(null)
   }
 
