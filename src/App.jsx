@@ -3,11 +3,7 @@ import JoinRoom from './components/JoinRoom'
 import ChatRoom from './components/ChatRoom'
 
 export default function App() {
-  const [session, setSession] = useState(() => {
-    const roomCode = sessionStorage.getItem('roomCode')
-    const nickname = localStorage.getItem('nickname')
-    return roomCode && nickname ? { roomCode, nickname } : null
-  })
+  const [session, setSession] = useState(null)
 
   function handleJoin(roomCode, nickname) {
     sessionStorage.setItem('roomCode', roomCode)
