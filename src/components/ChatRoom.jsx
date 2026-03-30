@@ -219,8 +219,7 @@ export default function ChatRoom({ roomCode, nickname, onLeave }) {
   }
 
   function copyInvite() {
-    const url = `${window.location.origin}${window.location.pathname}?room=${roomCode}`
-    navigator.clipboard.writeText(url)
+    navigator.clipboard.writeText(roomCode)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -255,7 +254,7 @@ export default function ChatRoom({ roomCode, nickname, onLeave }) {
             <span className="room-code-value">{roomCode}</span>
           </div>
           <button className="btn-small" onClick={copyInvite}>
-            {copied ? 'Copied!' : 'Copy Invite Link'}
+            {copied ? 'Copied!' : 'Copy Room Code'}
           </button>
         </div>
 

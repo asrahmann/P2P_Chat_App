@@ -4,6 +4,24 @@ import { joinRoom, selfId } from 'trystero'
 const APP_ID = 'shade404-chat-v1'
 const TYPING_TIMEOUT = 3000
 
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer)
+  const chunks = []
+  for (let i = 0; i < bytes.length; i += 8192) {
+    chunks.push(String.fromCharCode(...bytes.subarray(i, i + 8192)))
+  }
+  return btoa(chunks.join(''))
+}
+
+function base64ToArrayBuffer(base64) {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return bytes.buffer
+}
+
 export function useRoom(roomCode, nickname) {
   const [messages, setMessages] = useState([])
   const [peers, setPeers] = useState(new Map())
@@ -117,7 +135,8 @@ export function useRoom(roomCode, nickname) {
     })
 
     onImg((data, peerId) => {
-      const blob = new Blob([data.data], { type: data.mimeType })
+      const buffer = base64ToArrayBuffer(data.data)
+      const blob = new Blob([buffer], { type: data.mimeType })
       const url = URL.createObjectURL(blob)
       blobUrlsRef.current.push(url)
       setMessages((msgs) => [
@@ -199,7 +218,7 @@ export function useRoom(roomCode, nickname) {
       const buffer = await file.arrayBuffer()
       const data = {
         id: crypto.randomUUID(),
-        data: buffer,
+        data: arrayBufferToBase64(buffer),
         mimeType: file.type,
         fileName: file.name,
         sender: nickname,
