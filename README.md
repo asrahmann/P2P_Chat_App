@@ -1,16 +1,34 @@
-# React + Vite
+# Shade404 // Underground Chat
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+P2P encrypted group chat with a cyberpunk terminal aesthetic. No servers, no logs, no trace.
 
-Currently, two official plugins are available:
+Built with [Trystero](https://github.com/dmotz/trystero) for peer-to-peer WebRTC connections and React + Vite.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Features
 
-## React Compiler
+- **P2P encrypted messaging** — direct connections between peers, no server relay
+- **Audio file sharing** — share mp3, wav, ogg, and other audio files (up to 100 MB)
+- **Image sharing** — drag-drop, paste, or file picker with inline preview
+- **Live voice chat** — WebRTC-based voice with voice activity detection
+- **Network Map** — real-time canvas visualization of all connected nodes; pulses ripple along connection lines when someone sends a message
+- **Cipher decode effect** — incoming messages appear as scrambled hacker text that decodes left-to-right
+- **Custom user colors** — click your handle to pick from 50 colors, synced to all peers
+- **Cyberpunk UI** — monospace fonts, neon borders, CRT scanlines, cracked glass overlay, terminal-style input
+- **Typing indicators** — see who's composing a message
+- **Sound notifications** — synthesized audio cues for messages, joins, and leaves
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Getting Started
 
-## Expanding the ESLint configuration
+```bash
+npm install
+npm run dev
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Open two browser tabs to the same room code to test P2P features.
+
+## Tech Stack
+
+- **React 19** + **Vite**
+- **Trystero** — P2P WebRTC mesh networking
+- **HTML5 Canvas** — Network Map visualization
+- **Web Audio API** — sound effects and voice chat

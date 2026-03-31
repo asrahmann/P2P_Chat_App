@@ -22,21 +22,27 @@ function base64ToArrayBuffer(base64) {
   return bytes.buffer
 }
 
-export function useRoom(roomCode, nickname) {
+export function useRoom(roomCode, nickname, userColor) {
   const [messages, setMessages] = useState([])
   const [peers, setPeers] = useState(new Map())
   const [connected, setConnected] = useState(false)
   const [typingPeers, setTypingPeers] = useState(new Map())
   const roomRef = useRef(null)
   const sendMsgRef = useRef(null)
-  const sendImgRef = useRef(null)
+  const sendFileRef = useRef(null)
   const sendMetaRef = useRef(null)
   const sendTypingRef = useRef(null)
+  const sendColorRef = useRef(null)
+  const userColorRef = useRef(userColor)
   const typingTimersRef = useRef(new Map())
   const blobUrlsRef = useRef([])
   const onMessageCallbackRef = useRef(null)
   const onJoinCallbackRef = useRef(null)
   const onLeaveCallbackRef = useRef(null)
+
+  useEffect(() => {
+    userColorRef.current = userColor
+  }, [userColor])
 
   useEffect(() => {
     if (!roomCode || !nickname) return
@@ -45,19 +51,21 @@ export function useRoom(roomCode, nickname) {
     roomRef.current = room
 
     const [sendMsg, onMsg] = room.makeAction('message')
-    const [sendImg, onImg] = room.makeAction('image')
+    const [sendFile, onFile] = room.makeAction('file')
     const [sendMeta, onMeta] = room.makeAction('meta')
     const [sendTyping, onTyping] = room.makeAction('typing')
+    const [sendColor, onColor] = room.makeAction('color')
 
     sendMsgRef.current = sendMsg
-    sendImgRef.current = sendImg
+    sendFileRef.current = sendFile
     sendMetaRef.current = sendMeta
     sendTypingRef.current = sendTyping
+    sendColorRef.current = sendColor
 
     room.onPeerJoin((peerId) => {
       setPeers((prev) => new Map(prev).set(peerId, { nickname: peerId.slice(0, 6) }))
       setConnected(true)
-      sendMeta({ nickname }, peerId)
+      sendMeta({ nickname, color: userColorRef.current }, peerId)
     })
 
     room.onPeerLeave((peerId) => {
@@ -94,7 +102,7 @@ export function useRoom(roomCode, nickname) {
       setPeers((prev) => {
         const next = new Map(prev)
         const isNew = !next.has(peerId) || next.get(peerId).nickname === peerId.slice(0, 6)
-        next.set(peerId, { nickname: data.nickname })
+        next.set(peerId, { nickname: data.nickname, color: data.color || null })
 
         if (isNew) {
           setMessages((msgs) => [
@@ -131,27 +139,28 @@ export function useRoom(roomCode, nickname) {
         next.delete(peerId)
         return next
       })
-      onMessageCallbackRef.current?.(data.sender)
+      onMessageCallbackRef.current?.(data.sender, peerId)
     })
 
-    onImg((data, peerId) => {
+    onFile((data, peerId) => {
       const buffer = base64ToArrayBuffer(data.data)
       const blob = new Blob([buffer], { type: data.mimeType })
       const url = URL.createObjectURL(blob)
       blobUrlsRef.current.push(url)
+      const isAudio = data.mimeType.startsWith('audio/')
       setMessages((msgs) => [
         ...msgs,
         {
           id: data.id || crypto.randomUUID(),
-          type: 'image',
-          imageUrl: url,
+          type: isAudio ? 'audio' : 'image',
+          ...(isAudio ? { audioUrl: url } : { imageUrl: url }),
           fileName: data.fileName,
           sender: data.sender,
           peerId,
           timestamp: data.timestamp || Date.now(),
         },
       ])
-      onMessageCallbackRef.current?.(data.sender)
+      onMessageCallbackRef.current?.(data.sender, peerId)
     })
 
     onTyping((data, peerId) => {
@@ -180,6 +189,17 @@ export function useRoom(roomCode, nickname) {
           typingTimersRef.current.delete(peerId)
         }, TYPING_TIMEOUT)
       )
+    })
+
+    onColor((data, peerId) => {
+      setPeers((prev) => {
+        const next = new Map(prev)
+        const existing = next.get(peerId)
+        if (existing) {
+          next.set(peerId, { ...existing, color: data.color })
+        }
+        return next
+      })
     })
 
     setConnected(true)
@@ -212,9 +232,23 @@ export function useRoom(roomCode, nickname) {
     [nickname]
   )
 
-  const sendImage = useCallback(
+  const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100 MB
+
+  const sendFile = useCallback(
     async (file) => {
-      if (!sendImgRef.current) return
+      if (!sendFileRef.current) return
+      if (file.size > MAX_FILE_SIZE) {
+        setMessages((msgs) => [
+          ...msgs,
+          {
+            id: crypto.randomUUID(),
+            type: 'system',
+            text: `File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Max size is 100 MB.`,
+            timestamp: Date.now(),
+          },
+        ])
+        return
+      }
       const buffer = await file.arrayBuffer()
       const data = {
         id: crypto.randomUUID(),
@@ -224,16 +258,17 @@ export function useRoom(roomCode, nickname) {
         sender: nickname,
         timestamp: Date.now(),
       }
-      sendImgRef.current(data)
+      sendFileRef.current(data)
 
       const url = URL.createObjectURL(file)
       blobUrlsRef.current.push(url)
+      const isAudio = file.type.startsWith('audio/')
       setMessages((msgs) => [
         ...msgs,
         {
           id: data.id,
-          type: 'image',
-          imageUrl: url,
+          type: isAudio ? 'audio' : 'image',
+          ...(isAudio ? { audioUrl: url } : { imageUrl: url }),
           fileName: file.name,
           sender: nickname,
           peerId: 'self',
@@ -250,6 +285,10 @@ export function useRoom(roomCode, nickname) {
     },
     [nickname]
   )
+
+  const sendColorChange = useCallback((color) => {
+    sendColorRef.current?.({ color })
+  }, [])
 
   const addLocalMessage = useCallback((msg) => {
     setMessages((msgs) => [...msgs, msg])
@@ -272,8 +311,9 @@ export function useRoom(roomCode, nickname) {
     connected,
     typingPeers,
     sendMessage,
-    sendImage,
+    sendFile,
     sendTypingIndicator,
+    sendColorChange,
     addLocalMessage,
     selfId,
     room: roomRef,

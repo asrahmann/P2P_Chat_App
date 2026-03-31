@@ -1,8 +1,47 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import EmojiPicker from 'emoji-picker-react'
 import { useRoom } from '../hooks/useRoom'
 import { useVoice } from '../hooks/useVoice'
 import { playMessageSound, playJoinSound, playLeaveSound } from '../utils/sounds'
+import NetworkMap from './NetworkMap'
+
+const CIPHER_CHARS = '0123456789ABCDEFabcdef@#$%&*!?<>{}[]=/|~ァイウエオカキクケコサシスセソタチツテト░▒▓█'
+
+function DecodingText({ text }) {
+  const [display, setDisplay] = useState(() => {
+    const chars = [...text]
+    return chars.map(c => c === ' ' ? ' ' : CIPHER_CHARS[Math.floor(Math.random() * CIPHER_CHARS.length)]).join('')
+  })
+
+  useEffect(() => {
+    const chars = [...text]
+    const len = chars.length
+    if (len === 0) return
+    const totalFrames = Math.max(20, Math.min(len * 3, 60))
+    let frame = 0
+
+    const interval = setInterval(() => {
+      frame++
+      const revealCount = Math.floor((frame / totalFrames) * len)
+
+      if (revealCount >= len) {
+        setDisplay(text)
+        clearInterval(interval)
+        return
+      }
+
+      setDisplay(chars.map((c, i) => {
+        if (i < revealCount) return c
+        if (c === ' ') return ' '
+        return CIPHER_CHARS[Math.floor(Math.random() * CIPHER_CHARS.length)]
+      }).join(''))
+    }, 30)
+
+    return () => clearInterval(interval)
+  }, [text])
+
+  return display
+}
 
 function formatTime(ts) {
   return new Date(ts).toLocaleTimeString([], {
@@ -11,19 +50,28 @@ function formatTime(ts) {
   })
 }
 
-function getAvatarColor(name) {
-  const colors = [
-    '#5865F2', '#57F287', '#FEE75C', '#EB459E', '#ED4245',
-    '#F47B67', '#E78FCF', '#9B84EE', '#45DDC0', '#F0B232',
-  ]
+const COLOR_PALETTE = [
+  '#E91E63', '#F44336', '#FF5722', '#FF9800', '#FFC107',
+  '#FFEB3B', '#CDDC39', '#8BC34A', '#4CAF50', '#009688',
+  '#00BCD4', '#03A9F4', '#2196F3', '#3F51B5', '#673AB7',
+  '#9C27B0', '#E040FB', '#FF4081', '#FF6E40', '#FFD740',
+  '#69F0AE', '#40C4FF', '#7C4DFF', '#536DFE', '#448AFF',
+  '#18FFFF', '#64FFDA', '#B2FF59', '#EEFF41', '#FFD180',
+  '#FF9E80', '#EA80FC', '#B388FF', '#8C9EFF', '#82B1FF',
+  '#80D8FF', '#84FFFF', '#A7FFEB', '#CCFF90', '#F4FF81',
+  '#FFE57F', '#FFD54F', '#FFB74D', '#FF8A65', '#A1887F',
+  '#90A4AE', '#5865F2', '#57F287', '#EB459E', '#ED4245',
+]
+
+function getDefaultColor(name) {
   let hash = 0
   for (let i = 0; i < name.length; i++) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash)
   }
-  return colors[Math.abs(hash) % colors.length]
+  return COLOR_PALETTE[Math.abs(hash) % COLOR_PALETTE.length]
 }
 
-function MessageItem({ msg, prevMsg }) {
+function MessageItem({ msg, prevMsg, getColor, onNameClick }) {
   if (msg.type === 'system') {
     return (
       <div className="message-system">
@@ -65,14 +113,21 @@ function MessageItem({ msg, prevMsg }) {
           <div className="message-image">
             <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer"><img src={msg.imageUrl} alt={msg.fileName || 'shared image'} /></a>
           </div>
+        ) : msg.type === 'audio' ? (
+          <div className="message-audio">
+            <span className="audio-file-name">{msg.fileName || 'audio'}</span>
+            <audio controls preload="metadata" src={msg.audioUrl} />
+          </div>
         ) : (
-          <div className="message-text">{msg.text}</div>
+          <div className="message-text">
+            <DecodingText text={msg.text} />
+          </div>
         )}
       </div>
     )
   }
 
-  const color = isAI ? '#5865F2' : getAvatarColor(msg.sender)
+  const color = isAI ? '#5865F2' : getColor(msg.peerId, msg.sender)
 
   return (
     <div className="message-group">
@@ -81,15 +136,26 @@ function MessageItem({ msg, prevMsg }) {
       </div>
       <div className="message-content">
         <div className="message-header">
-          <span className="message-author" style={{ color }}>{msg.sender}</span>
+          <span
+            className={`message-author ${!isAI && msg.peerId === 'self' ? 'message-author-clickable' : ''}`}
+            style={{ color }}
+            onClick={!isAI && msg.peerId === 'self' ? onNameClick : undefined}
+          >{msg.sender}</span>
           <span className="message-time">{formatTime(msg.timestamp)}</span>
         </div>
         {msg.type === 'image' ? (
           <div className="message-image">
             <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer"><img src={msg.imageUrl} alt={msg.fileName || 'shared image'} /></a>
           </div>
+        ) : msg.type === 'audio' ? (
+          <div className="message-audio">
+            <span className="audio-file-name">{msg.fileName || 'audio'}</span>
+            <audio controls preload="metadata" src={msg.audioUrl} />
+          </div>
         ) : (
-          <div className="message-text">{msg.text}</div>
+          <div className="message-text">
+            <DecodingText text={msg.text} />
+          </div>
         )}
       </div>
     </div>
@@ -100,9 +166,15 @@ export default function ChatRoom({ roomCode, nickname, onLeave }) {
   const [input, setInput] = useState('')
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [colorPickerOpen, setColorPickerOpen] = useState(false)
+  const [lastActivity, setLastActivity] = useState(null)
+  const [userColor, setUserColor] = useState(() => {
+    return localStorage.getItem('shade404-user-color') || getDefaultColor(nickname)
+  })
   const messagesEndRef = useRef(null)
   const fileInputRef = useRef(null)
   const emojiRef = useRef(null)
+  const colorPickerRef = useRef(null)
   const typingTimeoutRef = useRef(null)
 
   const {
@@ -110,13 +182,15 @@ export default function ChatRoom({ roomCode, nickname, onLeave }) {
     peers,
     typingPeers,
     sendMessage,
-    sendImage,
+    sendFile,
     sendTypingIndicator,
+    sendColorChange,
+    addLocalMessage,
     room,
     onMessage,
     onJoin,
     onLeave: onPeerLeave,
-  } = useRoom(roomCode, nickname)
+  } = useRoom(roomCode, nickname, userColor)
 
   const { isMuted, activeSpeakers, toggleMute } = useVoice(room, peers)
 
@@ -134,10 +208,11 @@ export default function ChatRoom({ roomCode, nickname, onLeave }) {
     return result
   }, [rawMessages])
 
-  // Register sound callbacks
+  // Register sound callbacks + activity tracking
   useEffect(() => {
-    onMessage(() => {
+    onMessage((_sender, peerId) => {
       playMessageSound()
+      setLastActivity({ peerId, timestamp: Date.now() })
     })
     onJoin(() => playJoinSound())
     onPeerLeave(() => playLeaveSound())
@@ -157,6 +232,31 @@ export default function ChatRoom({ roomCode, nickname, onLeave }) {
     if (emojiOpen) document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [emojiOpen])
+
+  // Close color picker on outside click
+  useEffect(() => {
+    function handleClick(e) {
+      if (e.target.closest('.message-author-clickable')) return
+      if (colorPickerRef.current && !colorPickerRef.current.contains(e.target)) {
+        setColorPickerOpen(false)
+      }
+    }
+    if (colorPickerOpen) document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [colorPickerOpen])
+
+  function handleColorSelect(color) {
+    setUserColor(color)
+    localStorage.setItem('shade404-user-color', color)
+    sendColorChange(color)
+    setColorPickerOpen(false)
+  }
+
+  function getColor(peerId, senderName) {
+    if (peerId === 'self') return userColor
+    const peer = peers.get(peerId)
+    return peer?.color || getDefaultColor(senderName)
+  }
 
   function handleInputChange(e) {
     setInput(e.target.value)
@@ -182,6 +282,7 @@ export default function ChatRoom({ roomCode, nickname, onLeave }) {
     clearTimeout(typingTimeoutRef.current)
 
     sendMessage(text)
+    setLastActivity({ peerId: 'self', timestamp: Date.now() })
   }
 
   function handleEmojiSelect(emojiData) {
@@ -189,11 +290,28 @@ export default function ChatRoom({ roomCode, nickname, onLeave }) {
     setEmojiOpen(false)
   }
 
-  function handleFileSelect(e) {
-    const file = e.target.files?.[0]
-    if (file && file.type.startsWith('image/')) {
-      sendImage(file)
+  function showError(text) {
+    addLocalMessage({
+      id: crypto.randomUUID(),
+      type: 'system',
+      text,
+      timestamp: Date.now(),
+    })
+  }
+
+  function tryShareFile(file) {
+    if (!file) return
+    if (!file.type.startsWith('image/') && !file.type.startsWith('audio/')) {
+      const ext = file.name.split('.').pop() || file.type || 'unknown'
+      showError(`Can't share .${ext} files. Only images and audio files are supported.`)
+      return
     }
+    sendFile(file)
+    setLastActivity({ peerId: 'self', timestamp: Date.now() })
+  }
+
+  function handleFileSelect(e) {
+    tryShareFile(e.target.files?.[0])
     e.target.value = ''
   }
 
@@ -204,7 +322,7 @@ export default function ChatRoom({ roomCode, nickname, onLeave }) {
       if (item.type.startsWith('image/')) {
         e.preventDefault()
         const file = item.getAsFile()
-        if (file) sendImage(file)
+        if (file) sendFile(file)
         return
       }
     }
@@ -213,9 +331,7 @@ export default function ChatRoom({ roomCode, nickname, onLeave }) {
   function handleDrop(e) {
     e.preventDefault()
     const file = e.dataTransfer?.files?.[0]
-    if (file && file.type.startsWith('image/')) {
-      sendImage(file)
-    }
+    if (file) tryShareFile(file)
   }
 
   function copyInvite() {
@@ -242,10 +358,83 @@ export default function ChatRoom({ roomCode, nickname, onLeave }) {
       onDrop={handleDrop}
       onDragOver={(e) => e.preventDefault()}
     >
+      {/* Cracked glass overlay */}
+      <div className="crack-overlay">
+        <svg viewBox="0 0 1920 1080" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+          {/* Impact point — upper right area */}
+          <circle cx="1380" cy="220" r="3" fill="rgba(0,255,200,0.12)" />
+          {/* Main radial cracks from impact */}
+          <g stroke="rgba(0,255,200,0.07)" strokeWidth="0.8" fill="none">
+            <path d="M1380 220 L1520 80" />
+            <path d="M1380 220 L1600 180" />
+            <path d="M1380 220 L1480 350" />
+            <path d="M1380 220 L1250 120" />
+            <path d="M1380 220 L1200 280" />
+            <path d="M1380 220 L1350 400" />
+            <path d="M1380 220 L1550 320" />
+            <path d="M1380 220 L1420 50" />
+          </g>
+          {/* Secondary branches */}
+          <g stroke="rgba(0,255,200,0.05)" strokeWidth="0.5" fill="none">
+            <path d="M1520 80 L1580 20" />
+            <path d="M1520 80 L1620 110" />
+            <path d="M1600 180 L1700 150" />
+            <path d="M1600 180 L1650 250" />
+            <path d="M1480 350 L1520 450" />
+            <path d="M1480 350 L1560 380" />
+            <path d="M1250 120 L1150 60" />
+            <path d="M1250 120 L1180 180" />
+            <path d="M1200 280 L1080 320" />
+            <path d="M1200 280 L1150 220" />
+            <path d="M1350 400 L1300 500" />
+            <path d="M1350 400 L1420 480" />
+            <path d="M1550 320 L1650 360" />
+            <path d="M1420 50 L1380 0" />
+            <path d="M1420 50 L1500 10" />
+          </g>
+          {/* Tertiary fine cracks */}
+          <g stroke="rgba(0,255,200,0.03)" strokeWidth="0.3" fill="none">
+            <path d="M1580 20 L1620 0" />
+            <path d="M1620 110 L1700 90" />
+            <path d="M1700 150 L1780 130" />
+            <path d="M1650 250 L1720 280" />
+            <path d="M1520 450 L1500 520" />
+            <path d="M1560 380 L1630 420" />
+            <path d="M1150 60 L1100 20" />
+            <path d="M1180 180 L1100 200" />
+            <path d="M1080 320 L1000 360" />
+            <path d="M1300 500 L1250 560" />
+            <path d="M1420 480 L1460 540" />
+            <path d="M1650 360 L1720 400" />
+          </g>
+          {/* Concentric stress rings around impact */}
+          <circle cx="1380" cy="220" r="40" stroke="rgba(0,255,200,0.04)" strokeWidth="0.4" fill="none" />
+          <circle cx="1380" cy="220" r="90" stroke="rgba(0,255,200,0.03)" strokeWidth="0.3" fill="none" />
+          <circle cx="1380" cy="220" r="160" stroke="rgba(0,255,200,0.02)" strokeWidth="0.3" fill="none" />
+          {/* Second smaller impact — lower left */}
+          <circle cx="320" cy="780" r="2" fill="rgba(255,0,255,0.08)" />
+          <g stroke="rgba(255,0,255,0.04)" strokeWidth="0.5" fill="none">
+            <path d="M320 780 L200 700" />
+            <path d="M320 780 L420 680" />
+            <path d="M320 780 L250 880" />
+            <path d="M320 780 L430 850" />
+            <path d="M320 780 L180 820" />
+          </g>
+          <g stroke="rgba(255,0,255,0.025)" strokeWidth="0.3" fill="none">
+            <path d="M200 700 L140 650" />
+            <path d="M420 680 L480 620" />
+            <path d="M250 880 L200 950" />
+            <path d="M430 850 L500 900" />
+            <path d="M180 820 L100 860" />
+          </g>
+          <circle cx="320" cy="780" r="50" stroke="rgba(255,0,255,0.025)" strokeWidth="0.3" fill="none" />
+        </svg>
+      </div>
+
       {/* Sidebar */}
       <div className="sidebar">
         <div className="sidebar-header">
-          <h2>Shade404 Chat</h2>
+          <h2>Shade404 // Network</h2>
         </div>
 
         <div className="room-info">
@@ -274,16 +463,23 @@ export default function ChatRoom({ roomCode, nickname, onLeave }) {
                 <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
               </svg>
             )}
-            <span>{isMuted ? 'Join Voice' : 'Leave Voice'}</span>
+            <span>{isMuted ? 'Open Mic' : 'Kill Mic'}</span>
           </button>
         </div>
 
         <div className="members-section">
-          <h3>Online — {peerCount + 1}</h3>
+          <h3>Active Nodes — {peerCount + 1}</h3>
           <div className="member-list">
-            <div className={`member ${activeSpeakers.has('self') ? 'member-speaking' : ''}`}>
-              <div className="member-dot" style={{ background: '#57F287' }} />
-              <span>{nickname} (you)</span>
+            <div className={`member ${activeSpeakers.has('self') ? 'member-speaking' : ''}`} ref={colorPickerRef}>
+              <div className="member-dot" style={{ background: userColor }} />
+              <span
+                className="member-name-clickable"
+                style={{ color: userColor }}
+                onClick={() => setColorPickerOpen(!colorPickerOpen)}
+                title="Change your color"
+              >
+                {nickname} (you)
+              </span>
               {!isMuted && (
                 <span className="member-voice-icon">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -291,15 +487,38 @@ export default function ChatRoom({ roomCode, nickname, onLeave }) {
                   </svg>
                 </span>
               )}
+              {colorPickerOpen && (
+                <div className="color-picker-popup">
+                  <div className="color-picker-label">Pick your color</div>
+                  <div className="color-picker-grid">
+                    {COLOR_PALETTE.map((c) => (
+                      <button
+                        key={c}
+                        className={`color-swatch ${c === userColor ? 'color-swatch-active' : ''}`}
+                        style={{ background: c }}
+                        onClick={() => handleColorSelect(c)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             {[...peers.entries()].map(([id, peer]) => (
               <div key={id} className={`member ${activeSpeakers.has(id) ? 'member-speaking' : ''}`}>
-                <div className="member-dot" style={{ background: '#57F287' }} />
-                <span>{peer.nickname}</span>
+                <div className="member-dot" style={{ background: peer.color || getDefaultColor(peer.nickname) }} />
+                <span style={{ color: peer.color || getDefaultColor(peer.nickname) }}>{peer.nickname}</span>
               </div>
             ))}
           </div>
         </div>
+
+        <NetworkMap
+          peers={peers}
+          nickname={nickname}
+          userColor={userColor}
+          getDefaultColor={getDefaultColor}
+          lastActivity={lastActivity}
+        />
 
         <div className="sidebar-footer">
           <button className="btn-icon btn-leave" onClick={onLeave} title="Leave Room">
@@ -314,31 +533,25 @@ export default function ChatRoom({ roomCode, nickname, onLeave }) {
       {/* Main Chat Area */}
       <div className="chat-main">
         <div className="chat-header">
-          <span className="chat-header-hash">#</span>
-          <span className="chat-header-name">general</span>
+          <span className="chat-header-hash">//</span>
+          <span className="chat-header-name">Chatroom</span>
           <span className="chat-header-divider" />
           <span className="chat-header-topic">
-            Peer-to-peer encrypted chat
+            P2P encrypted // no servers // no logs
           </span>
         </div>
 
         <div className="messages-container">
           <div className="messages-start">
-            <div className="welcome-icon">
-              <svg width="44" height="44" viewBox="0 0 48 48" fill="none">
-                <rect width="48" height="48" rx="24" fill="#5865F2" />
-                <path d="M18 16C18 16 21 14 24 14C27 14 30 16 30 16V32C30 32 27 30 24 30C21 30 18 32 18 32V16Z" fill="white" opacity="0.9" />
-              </svg>
-            </div>
-            <h2>Welcome to #{roomCode}</h2>
+            <h2>// Node Connected: {roomCode}</h2>
             <p>
-              This is the start of your P2P chat. Share the room code or invite
-              link with your friends to get started.
+              Encrypted tunnel established. Share the room code to
+              link more nodes to this network.
             </p>
           </div>
 
           {messages.map((msg, i) => (
-            <MessageItem key={msg.id} msg={msg} prevMsg={messages[i - 1]} />
+            <MessageItem key={msg.id} msg={msg} prevMsg={messages[i - 1]} getColor={getColor} onNameClick={() => setColorPickerOpen(true)} />
           ))}
           <div ref={messagesEndRef} />
         </div>
@@ -358,7 +571,7 @@ export default function ChatRoom({ roomCode, nickname, onLeave }) {
             type="button"
             className="btn-icon input-action"
             onClick={() => fileInputRef.current?.click()}
-            title="Upload image"
+            title="Upload file"
           >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z" />
@@ -367,7 +580,7 @@ export default function ChatRoom({ roomCode, nickname, onLeave }) {
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,audio/*"
             hidden
             onChange={handleFileSelect}
           />
@@ -400,7 +613,7 @@ export default function ChatRoom({ roomCode, nickname, onLeave }) {
           <input
             type="text"
             className="chat-text-input"
-            placeholder={`Message #${roomCode}`}
+            placeholder={`input> _`}
             value={input}
             onChange={handleInputChange}
             onPaste={handlePaste}
