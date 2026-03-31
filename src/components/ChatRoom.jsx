@@ -63,7 +63,7 @@ function MessageItem({ msg, prevMsg }) {
         <span className="message-time-inline">{formatTime(msg.timestamp)}</span>
         {msg.type === 'image' ? (
           <div className="message-image">
-            <img src={msg.imageUrl} alt={msg.fileName || 'shared image'} />
+            <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer"><img src={msg.imageUrl} alt={msg.fileName || 'shared image'} /></a>
           </div>
         ) : (
           <div className="message-text">{msg.text}</div>
@@ -86,7 +86,7 @@ function MessageItem({ msg, prevMsg }) {
         </div>
         {msg.type === 'image' ? (
           <div className="message-image">
-            <img src={msg.imageUrl} alt={msg.fileName || 'shared image'} />
+            <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer"><img src={msg.imageUrl} alt={msg.fileName || 'shared image'} /></a>
           </div>
         ) : (
           <div className="message-text">{msg.text}</div>
