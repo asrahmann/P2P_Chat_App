@@ -26,9 +26,27 @@ npm run dev
 
 Open two browser tabs to the same room code to test P2P features.
 
+## Testing
+
+```bash
+npx playwright install chromium
+npx playwright test
+```
+
+Playwright tests cover:
+
+- **Overflow clipping** — verifies message groups don't clip content via `overflow: hidden`
+- **Long message rendering** — 600+ char strings, multiline text, and long paragraphs render fully
+- **Scroll stability** — new messages don't yank scroll position when reading history
+- **Layout shift** — typing indicator doesn't resize the message container
+- **Burst rendering** — 50 rapid messages render without errors or dropped frames
+
+P2P message delivery between peers requires real network connections and can't be tested in Playwright — test that with multiple browser tabs or devices on the same room code.
+
 ## Tech Stack
 
 - **React 19** + **Vite**
 - **Trystero** — P2P WebRTC mesh networking
+- **Playwright** — UI stress and regression tests
 - **HTML5 Canvas** — Network Map visualization
 - **Web Audio API** — sound effects and voice chat
