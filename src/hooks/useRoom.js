@@ -53,7 +53,7 @@ export function useRoom(roomCode, nickname, userColor) {
   useEffect(() => {
     if (!roomCode || !nickname) return
 
-    const room = joinRoom({ appId: APP_ID }, roomCode)
+    const room = joinRoom({ appId: APP_ID, password: roomCode }, roomCode)
     roomRef.current = room
 
     const [sendMsg, onMsg] = room.makeAction('message')
