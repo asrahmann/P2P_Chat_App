@@ -71,6 +71,27 @@ function getDefaultColor(name) {
   return COLOR_PALETTE[Math.abs(hash) % COLOR_PALETTE.length]
 }
 
+function darkenHex(hex, factor = 0.6) {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return `rgb(${Math.round(r * factor)}, ${Math.round(g * factor)}, ${Math.round(b * factor)})`
+}
+
+function avatarStyle(color) {
+  return {
+    background: `linear-gradient(135deg, ${color}, ${darkenHex(color, 0.5)})`,
+    boxShadow: `0 0 10px ${color}26`,
+  }
+}
+
+function isLightColor(hex) {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return (r * 299 + g * 587 + b * 114) / 1000 > 160
+}
+
 function MessageItem({ msg, prevMsg, getColor, onNameClick }) {
   if (msg.type === 'system') {
     return (
@@ -83,7 +104,7 @@ function MessageItem({ msg, prevMsg, getColor, onNameClick }) {
   if (msg.type === 'thinking') {
     return (
       <div className="message-group">
-        <div className="avatar" style={{ background: '#5865F2' }}>AI</div>
+        <div className="avatar" style={avatarStyle('#5865F2')}>AI</div>
         <div className="message-content">
           <div className="message-header">
             <span className="message-author" style={{ color: '#5865F2' }}>AI</span>
@@ -98,6 +119,9 @@ function MessageItem({ msg, prevMsg, getColor, onNameClick }) {
   }
 
   const isAI = msg.sender === 'AI'
+  const color = isAI ? '#5865F2' : getColor(msg.peerId, msg.sender)
+  const borderStyle = { borderLeft: `2px solid ${color}33`, paddingLeft: '8px' }
+
   const isSameAuthor =
     prevMsg &&
     prevMsg.type !== 'system' &&
@@ -119,7 +143,7 @@ function MessageItem({ msg, prevMsg, getColor, onNameClick }) {
             <audio controls preload="metadata" src={msg.audioUrl} />
           </div>
         ) : (
-          <div className="message-text">
+          <div className="message-text" style={borderStyle}>
             <DecodingText text={msg.text} />
           </div>
         )}
@@ -127,11 +151,9 @@ function MessageItem({ msg, prevMsg, getColor, onNameClick }) {
     )
   }
 
-  const color = isAI ? '#5865F2' : getColor(msg.peerId, msg.sender)
-
   return (
     <div className="message-group">
-      <div className="avatar" style={{ background: color }}>
+      <div className="avatar" style={{ ...avatarStyle(color), color: isLightColor(color) ? '#000' : '#fff' }}>
         {isAI ? 'AI' : msg.sender.slice(0, 2).toUpperCase()}
       </div>
       <div className="message-content">
@@ -153,7 +175,7 @@ function MessageItem({ msg, prevMsg, getColor, onNameClick }) {
             <audio controls preload="metadata" src={msg.audioUrl} />
           </div>
         ) : (
-          <div className="message-text">
+          <div className="message-text" style={borderStyle}>
             <DecodingText text={msg.text} />
           </div>
         )}

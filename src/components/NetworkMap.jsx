@@ -90,7 +90,7 @@ export default function NetworkMap({ peers, nickname, userColor, getDefaultColor
       ctx.clearRect(0, 0, w, h)
 
       // Grid
-      ctx.strokeStyle = 'rgba(0, 255, 200, 0.035)'
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.025)'
       ctx.lineWidth = 0.5
       for (let x = 0; x < w; x += 16) {
         ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke()
@@ -140,7 +140,7 @@ export default function NetworkMap({ peers, nickname, userColor, getDefaultColor
           ctx.beginPath()
           ctx.moveTo(a.x, a.y)
           ctx.lineTo(b.x, b.y)
-          ctx.strokeStyle = `rgba(0, 255, 200, ${0.06 + glow * 0.4})`
+          ctx.strokeStyle = `rgba(255, 255, 255, ${0.06 + glow * 0.4})`
           ctx.lineWidth = 0.5 + glow * 2
           ctx.stroke()
         }
@@ -160,7 +160,7 @@ export default function NetworkMap({ peers, nickname, userColor, getDefaultColor
       }
 
       // Packets (traveling dots along connections)
-      ctx.shadowColor = 'rgba(0, 255, 200, 0.8)'
+      ctx.shadowColor = 'rgba(255, 255, 255, 0.6)'
       ctx.shadowBlur = 6
       for (let i = packets.length - 1; i >= 0; i--) {
         const p = packets[i]
