@@ -711,7 +711,6 @@ body {
   margin-top: 12px;
   position: relative;
   animation: holo-materialize 0.4s ease-out;
-  overflow: hidden;
 }
 
 /* Holographic scan line */

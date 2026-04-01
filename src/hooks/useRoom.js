@@ -3,6 +3,7 @@ import { joinRoom, selfId } from 'trystero'
 
 const APP_ID = 'shade404-chat-v1'
 const TYPING_TIMEOUT = 3000
+const MAX_MESSAGES = 500
 
 function arrayBufferToBase64(buffer) {
   const bytes = new Uint8Array(buffer)
@@ -20,6 +21,11 @@ function base64ToArrayBuffer(base64) {
     bytes[i] = binary.charCodeAt(i)
   }
   return bytes.buffer
+}
+
+function appendCapped(msgs, msg) {
+  const next = [...msgs, msg]
+  return next.length > MAX_MESSAGES ? next.slice(-MAX_MESSAGES) : next
 }
 
 export function useRoom(roomCode, nickname, userColor) {
@@ -75,15 +81,12 @@ export function useRoom(roomCode, nickname, userColor) {
         next.delete(peerId)
 
         if (peer) {
-          setMessages((msgs) => [
-            ...msgs,
-            {
-              id: crypto.randomUUID(),
-              type: 'system',
-              text: `${peer.nickname} left the chat`,
-              timestamp: Date.now(),
-            },
-          ])
+          setMessages((msgs) => appendCapped(msgs, {
+            id: crypto.randomUUID(),
+            type: 'system',
+            text: `${peer.nickname} left the chat`,
+            timestamp: Date.now(),
+          }))
           onLeaveCallbackRef.current?.(peer.nickname)
         }
 
@@ -105,15 +108,12 @@ export function useRoom(roomCode, nickname, userColor) {
         next.set(peerId, { nickname: data.nickname, color: data.color || null })
 
         if (isNew) {
-          setMessages((msgs) => [
-            ...msgs,
-            {
-              id: crypto.randomUUID(),
-              type: 'system',
-              text: `${data.nickname} joined the chat`,
-              timestamp: Date.now(),
-            },
-          ])
+          setMessages((msgs) => appendCapped(msgs, {
+            id: crypto.randomUUID(),
+            type: 'system',
+            text: `${data.nickname} joined the chat`,
+            timestamp: Date.now(),
+          }))
           onJoinCallbackRef.current?.(data.nickname)
         }
 
@@ -122,17 +122,14 @@ export function useRoom(roomCode, nickname, userColor) {
     })
 
     onMsg((data, peerId) => {
-      setMessages((msgs) => [
-        ...msgs,
-        {
-          id: data.id || crypto.randomUUID(),
-          type: 'text',
-          text: data.text,
-          sender: data.sender,
-          peerId,
-          timestamp: data.timestamp || Date.now(),
-        },
-      ])
+      setMessages((msgs) => appendCapped(msgs, {
+        id: data.id || crypto.randomUUID(),
+        type: 'text',
+        text: data.text,
+        sender: data.sender,
+        peerId,
+        timestamp: data.timestamp || Date.now(),
+      }))
       // Clear typing when message received from this peer
       setTypingPeers((prev) => {
         const next = new Map(prev)
@@ -148,18 +145,15 @@ export function useRoom(roomCode, nickname, userColor) {
       const url = URL.createObjectURL(blob)
       blobUrlsRef.current.push(url)
       const isAudio = data.mimeType.startsWith('audio/')
-      setMessages((msgs) => [
-        ...msgs,
-        {
-          id: data.id || crypto.randomUUID(),
-          type: isAudio ? 'audio' : 'image',
-          ...(isAudio ? { audioUrl: url } : { imageUrl: url }),
-          fileName: data.fileName,
-          sender: data.sender,
-          peerId,
-          timestamp: data.timestamp || Date.now(),
-        },
-      ])
+      setMessages((msgs) => appendCapped(msgs, {
+        id: data.id || crypto.randomUUID(),
+        type: isAudio ? 'audio' : 'image',
+        ...(isAudio ? { audioUrl: url } : { imageUrl: url }),
+        fileName: data.fileName,
+        sender: data.sender,
+        peerId,
+        timestamp: data.timestamp || Date.now(),
+      }))
       onMessageCallbackRef.current?.(data.sender, peerId)
     })
 
@@ -224,7 +218,7 @@ export function useRoom(roomCode, nickname, userColor) {
         timestamp: Date.now(),
       }
       sendMsgRef.current(msg)
-      setMessages((msgs) => [...msgs, { ...msg, type: 'text', peerId: 'self' }])
+      setMessages((msgs) => appendCapped(msgs, { ...msg, type: 'text', peerId: 'self' }))
       // Stop typing indicator when we send
       sendTypingRef.current?.({ typing: false, nickname })
       return msg
@@ -238,15 +232,12 @@ export function useRoom(roomCode, nickname, userColor) {
     async (file) => {
       if (!sendFileRef.current) return
       if (file.size > MAX_FILE_SIZE) {
-        setMessages((msgs) => [
-          ...msgs,
-          {
-            id: crypto.randomUUID(),
-            type: 'system',
-            text: `File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Max size is 100 MB.`,
-            timestamp: Date.now(),
-          },
-        ])
+        setMessages((msgs) => appendCapped(msgs, {
+          id: crypto.randomUUID(),
+          type: 'system',
+          text: `File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Max size is 100 MB.`,
+          timestamp: Date.now(),
+        }))
         return
       }
       const buffer = await file.arrayBuffer()
@@ -263,18 +254,15 @@ export function useRoom(roomCode, nickname, userColor) {
       const url = URL.createObjectURL(file)
       blobUrlsRef.current.push(url)
       const isAudio = file.type.startsWith('audio/')
-      setMessages((msgs) => [
-        ...msgs,
-        {
-          id: data.id,
-          type: isAudio ? 'audio' : 'image',
-          ...(isAudio ? { audioUrl: url } : { imageUrl: url }),
-          fileName: file.name,
-          sender: nickname,
-          peerId: 'self',
-          timestamp: data.timestamp,
-        },
-      ])
+      setMessages((msgs) => appendCapped(msgs, {
+        id: data.id,
+        type: isAudio ? 'audio' : 'image',
+        ...(isAudio ? { audioUrl: url } : { imageUrl: url }),
+        fileName: file.name,
+        sender: nickname,
+        peerId: 'self',
+        timestamp: data.timestamp,
+      }))
     },
     [nickname]
   )
@@ -291,7 +279,7 @@ export function useRoom(roomCode, nickname, userColor) {
   }, [])
 
   const addLocalMessage = useCallback((msg) => {
-    setMessages((msgs) => [...msgs, msg])
+    setMessages((msgs) => appendCapped(msgs, msg))
   }, [])
 
   // Callbacks for sound notifications

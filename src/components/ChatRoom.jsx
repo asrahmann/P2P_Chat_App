@@ -172,6 +172,8 @@ export default function ChatRoom({ roomCode, nickname, onLeave }) {
     return localStorage.getItem('shade404-user-color') || getDefaultColor(nickname)
   })
   const messagesEndRef = useRef(null)
+  const containerRef = useRef(null)
+  const isAtBottomRef = useRef(true)
   const fileInputRef = useRef(null)
   const emojiRef = useRef(null)
   const colorPickerRef = useRef(null)
@@ -219,8 +221,16 @@ export default function ChatRoom({ roomCode, nickname, onLeave }) {
   }, [onMessage, onJoin, onPeerLeave])
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (isAtBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
   }, [messages])
+
+  function handleScroll() {
+    const el = containerRef.current
+    if (!el) return
+    isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100
+  }
 
   // Close emoji picker on outside click
   useEffect(() => {
@@ -541,7 +551,7 @@ export default function ChatRoom({ roomCode, nickname, onLeave }) {
           </span>
         </div>
 
-        <div className="messages-container">
+        <div className="messages-container" ref={containerRef} onScroll={handleScroll}>
           <div className="messages-start">
             <h2>// Node Connected: {roomCode}</h2>
             <p>
@@ -556,15 +566,17 @@ export default function ChatRoom({ roomCode, nickname, onLeave }) {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Typing indicator */}
-        {typingText && (
-          <div className="typing-indicator">
-            <div className="typing-dots">
-              <span /><span /><span />
-            </div>
-            <span className="typing-text">{typingText}</span>
-          </div>
-        )}
+        {/* Typing indicator — always reserve space to prevent layout shift */}
+        <div className="typing-indicator">
+          {typingText && (
+            <>
+              <div className="typing-dots">
+                <span /><span /><span />
+              </div>
+              <span className="typing-text">{typingText}</span>
+            </>
+          )}
+        </div>
 
         <form className="chat-input-bar" onSubmit={handleSend}>
           <button
