@@ -29,3 +29,6 @@ links/
 # Playwright
 test-results/
 playwright-report/
+
+# Superpowers brainstorm
+.superpowers/
